@@ -94,20 +94,20 @@ getFilesContains(path, delimeter)->(
 	ll
 );
 
-processString(string, y)->(
+processString(string)->(
 	a = split('/',string);
 	a = get(a, length(a)-1);
 	a =replace(a, 'a', '_');
 	a =replace(a, 'b', '_');
 	s = split('_',a);
-	print(s)
-	[number(get(s,1)), y, number(get(s,3))]
+	print(s);
+	[number(get(s,1)), number(get(s,2)), number(get(s,3))]
 );
 
-pasteFrom(path, delimeter, origin,y)->(
+pasteFrom(path, delimeter, origin)->(
 	for(getFilesContains(path, delimeter),
 		fileName = _;
-		posO = processString(_,y) + origin;
+		posO = processString(_) + origin;
 		loadRawAndSet(fileName, posO);	
 		sleep(50);
 	);
