@@ -34,9 +34,20 @@ It means, you can generate any mini-structures using this!
 
 # Script usage for survival
 now there's no zip support, but there's save / load / info command.
+
 `/blueprint info`
+
 It shows how many bits you need for current 'holding' blueprint.
+
 `/blueprint save <name>`
+
 It saves current holded blueprint into prefixes + name.
+
 `/blueprint load <name>`
+
 It loads blueprint from <name>.Overrides current data of blueprint item.
+  
+`/blueprint loadZip mumei2 a0b0b0`
+ 
+ It loads a0b0b0.nbt from mumei2.zip.
+  
