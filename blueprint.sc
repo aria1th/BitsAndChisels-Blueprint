@@ -5,7 +5,8 @@ __config()->{
 		' ' -> '__print_default',
 		'info' -> '_palette',
 		'save <name>' ->'saveAs',
-		'load <savedblueprint>' -> 'loadAs'
+		'load <savedblueprint>' -> 'loadAs',
+		'loadZip <zip> <filename>' -> 'loadfromZip'
 		},
 	'arguments' -> {
 		'savedblueprint' -> {'type' -> 'term',
@@ -14,6 +15,8 @@ __config()->{
       				 ),
 			},
 		'name' -> {'type' -> 'term'},
+		'zip' -> {'type' -> 'term'},
+		'filename' -> {'type' -> 'term'},
 		}
 };
 
@@ -80,7 +83,14 @@ loadAs(fileName)->(
 	inventory_set(player(), slot, 1, 'bitsandchisels:blueprint', file);
 	print(player(), 'Successfully loaded blueprint')
 );
-
+loadfromZip(zipName, fileName)->(
+	if(!_holds(),  print(player(), 'No blueprint is being holded');return());
+	file = read_file(zipName + '.zip/'+ fileName, 'nbt');
+	if(file == null, print(player(), 'No file exists'); return());
+	slot = player()~'selected_slot';
+	inventory_set(player(), slot, 1, 'bitsandchisels:blueprint', file);
+	print(player(), 'Successfully loaded blueprint')
+);
 loadRawAndSet(fileName, pos)->(
 	file = read_file(fileName, 'nbt');
 	nbt = file:'blueprint';
