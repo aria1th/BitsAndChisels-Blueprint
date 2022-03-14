@@ -1,0 +1,372 @@
+client = MinecraftClient.getClient();
+player = client.getPlayer();
+world = client.getWorld();
+path = "C:/Users/Scarlet/Desktop/MultiMC/instances/1.16.5/.minecraft/config/EssentialClient/Scripts/";
+bitrange = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+targetStr = 'mumei';
+shouldBreak = true;
+fun readJson(fileName){
+    file = new File(path + fileName);
+    if(file.exists()){
+        json = Json.fromString(file.read());
+        return json.getValue();
+    }
+}
+fun asJson(file){
+    json = Json.fromString(file.read());
+    return json.getValue();
+}
+fun predicateJson(obj){
+    return obj.getName().contains('.json') && obj.getName().contains(targetStr);
+}
+fun getFiles(predicate){
+    file = new File(path);
+    ret = [];
+    foreach (files : file.getSubFiles()){
+        if(predicate(files)){
+            ret.append(files);
+        }
+    }
+    return ret;
+}
+fun getFilesPredicate(startswith){
+    file = new File(path);
+    ret = [];
+    foreach (files : file.getSubFiles()){
+        if(files.getName().contains('.json') && files.getName().contains(startswith)){
+            ret.append(files);
+        }
+    }
+    return ret;
+}
+fun parseJson(obj){
+    bp = obj.get('blueprint');
+    palette = bp.get('palette');
+    bits = bp.get('bits_v2');
+}
+class BitsBlock{
+    var name;
+    var prop;
+    static var blockName = 'bitsandchisels:bit_item';
+    static var accessKey = 'bit';
+    static var stack = Material.of('bitsandchisels:bit_item').asItemStack();
+    BitsBlock(palette){
+        this.name = palette.get('Name');
+        this.prop = palette.get('Properties');
+    }
+    fun find(p){
+        foreach(slots : p.getAllSlotsFor(BitsBlock.stack)){
+            i = p.getItemForSlot(slots);
+            n = i.getNbt().get('bit');
+            if(n.get('Name') == this.name && this.prop == n.get('prop')){
+                return slots;
+            }
+        }
+        return null;
+    }
+}
+fun prepareBits(palette){
+    idx = 0;
+    r = {};
+    foreach(p : palette){
+        r.put(idx, new BitsBlock(p));
+        idx = idx+1;
+    }
+    return r;
+}
+fun paletteToBitsBlock(palettes){
+    r = {};
+    foreach(p : palettes){
+        r.put(p, new BitsBlock(p));
+    }
+    return r;
+}
+fun swapToSlot(n){
+    if(n == null){
+        return false;
+    }
+    if (n==46){
+        player.setSelectedSlot(0);
+        return true;
+    } else if(n > 36) {
+        player.setSelectedSlot(n - 36);
+        return true;
+    } else {
+        s = player.getSwappableHotbarSlot();
+        player.swapPlayerSlotWithHotbar(n);
+        player.setSelectedSlot(s);
+        return true;
+    }
+    return false;
+}
+class BitsBlockAccess{
+    var nbt;
+    var airIdx;
+    var isAir = false;
+    var isFull = true;
+    BitsBlockAccess(pos){
+        block = world.getBlockAt(pos);
+        if (block.isReplaceable()){
+            this.nbt = null;
+            this.isAir = true;
+            this.isFull = false;
+        }
+        if (block.getId() == 'bits_block'){
+            this.isFull = false;
+            this.nbt = block.getBlockEntityData();
+        }
+    }
+    fun isAir(x,y,z){
+        if(this.isAir){
+            return true;
+        }
+        else if (this.isFull){
+            return false;
+        }
+           return this.getBit(x,y,z).get('Name') == 'minecraft:air';
+    }
+    fun getBit(x,y,z){
+        return this.nbt.get('palette').get(this.getAccess(x,y,z));
+    }
+    fun getIdx(x,y,z){
+        return z + 16*y + 256* x;
+    }
+    fun getAccess(x,y,z){
+        idx = this.getIdx(x,y,z);
+        return this.nbt.get('bits_v2').get(idx*2+1) * 256+ this.nbt.get('bits_v2').get(idx*2);
+    }
+
+}
+class Hist{
+    var mapv;
+    Hist(mapv){
+        this.mapv = mapv;
+    }
+    fun add(other){
+        n = this.mapv.copy();
+        foreach(keys : other.getKeys()){
+            if (n.get(keys) == null){
+                n.put(keys, other.get(keys));
+            }
+            else {
+                n.put(keys, n.get(keys) + other.get(keys));
+            }
+        }
+        return new Hist(n);
+    }
+    fun getKeys(){
+        return this.mapv.getKeys();
+    }
+    fun get(key){
+        return this.mapv.get(key);
+    }
+    fun addAll(iterable){
+        foreach (iter : iterable){
+            this.mapv.put(iter, 0);
+        }
+    }
+}
+fun asString(map){
+    if(map.get('Properties') != null){
+        ret= map.get('Name');
+        foreach( keys : map.get('Properties').getKeys()){
+            ret = ret + keys + map.get('Properties').get(keys);
+        }
+        return ret;
+    }
+    return map.get('Name') ;
+}
+class Blueprint{
+    var bits;
+    var palette;
+    var blockPalette;
+    var missing = {};
+    var worldAccess;
+    Blueprint(json){
+        this.palette = json.get('blueprint').get('palette');
+        this.blockPalette = prepareBits(this.palette);
+        this.bits = json.get('blueprint').get('bits_v2');
+    }
+    Blueprint(filename, fromFile){
+        json = readJson(filename);
+        this.palette = json.get('blueprint').get('palette');
+        this.bits = json.get('blueprint').get('bits_v2');
+        this.blockPalette = prepareBits(this.palette);
+    }
+    fun getIdx(x,y,z){
+        return z + 16*y + 256* x;
+    }
+    fun stat(){
+        hist = {};
+        foreach (bit : this.palette){
+            hist.put(asString(bit), 0);
+        }
+        foreach (bit : this.bits){
+            hist.put(asString(this.palette.get(bit)), hist.get(asString(this.palette.get(bit)))+1);
+        }
+        return new Hist(hist);
+    }
+    fun getBlock(x,y,z){
+        return this.palette.get(this.bits.get(this.getIdx(x,y,z)));
+    }
+    fun getBitsBlock(x,y,z){
+        return this.blockPalette.get(this.bits.get(this.getIdx(x,y,z)));
+    }
+    fun activeSearch(p,x,y,z){
+        val = this.getBitsBlock(x,y,z).find(p);
+        if(val == null){
+            key = this.bits.get(this.getIdx(x,y,z));
+            if(this.palette.get(key).get('Name') == 'minecraft:air'){
+                return null;
+            }
+            p.messageActionBar(this.palette.get(key));
+            if (this.missing.get(key) == null){
+                this.missing.put(key, 1);
+            }
+            else {
+                this.missing.put(key, this.missing.get(key)+1);
+            }
+            return false;
+        }
+        return val;
+    }
+
+    fun getAccuratePos(x,y,z){
+        return [x/16, y/16, z/16];
+    }
+    fun attachWorldAccess(ox,oy,oz){
+        this.worldAccess = new BitsBlockAccess(new Pos(ox,oy,oz));
+    }
+    fun placeBlock(p, ox, oy, oz){
+        this.attachWorldAccess(ox,oy,oz);
+        if(this.worldAccess.isFull){
+            return;
+        }
+        foreach (x : bitrange){
+            foreach(y : bitrange){
+                foreach(z : bitrange){
+                    if(!this.worldAccess.isAir(x,y,z)){
+                        continue;
+                    }
+                    slots = this.activeSearch(p, x,y,z);
+                    if(slots == false){
+                        if(shouldBreak){
+                            player.messageActionBar(this.palette.get(this.bits.get(this.getIdx(x,y,z))));
+                            sleep(1500);
+                            return;
+                        }
+                        else {
+                            continue;
+                        }
+                    }
+                    if(swapToSlot(slots)){
+                        sleep(100);
+                        p.interactBlock(ox + x+16, oy + y, oz + z, "up", ox, oy, oz, false);
+                    }
+                }
+            }
+        }
+        return this.missing.getKeys();
+    }
+    fun placeMaterial(p, comparePalette, ox, oy, oz){
+        this.attachWorldAccess(ox,oy,oz);
+        if(this.worldAccess.isFull){
+            return;
+        }
+        foreach (x : bitrange){
+            foreach(y : bitrange){
+                foreach(z : bitrange){
+                    if(!this.worldAccess.isAir(x,y,z)){
+                        continue;
+                    }
+                    bitPalette = this.palette.get(this.bits.get(this.getIdx(x,y,z)));
+                    if(bitPalette.get("Name") == comparePalette.get("Name") && bitPalette.get("Properties") == comparePalette.get("Properties")){
+                        p.interactBlock(ox + x+16, oy + y, oz + z, "up", ox, oy, oz, false);
+                    }
+                }
+            }
+        }
+    }
+}
+fun parseJsonName(file, startswith, delimeter, origin){
+    name = file.getName();
+    name = name.replaceAll(startswith, '');
+    name = name.replaceAll('.json', '');
+    name = name.split(delimeter);
+    return [origin.get(0)+ name.get(0).toNumber(), origin.get(1)+name.get(1).toNumber(), origin.get(2)+name.get(2).toNumber()];
+}
+class BlueprintCollection{
+    var startswith;
+    var delimeter;
+    var origin;
+    var blueprints = {};
+    var itemAccess = {};
+    BlueprintCollection(startswith, delimeter, origin){
+        this.startswith = startswith;
+        this.delimeter = delimeter;
+        this.origin = origin;
+        blueprints = getFilesPredicate(startswith);
+        player.message(blueprints);
+        foreach (files : blueprints){
+            //files = new File(filenames);
+            this.blueprints.put(parseJsonName(files, startswith, delimeter, origin), new Blueprint(asJson(files)));
+        }
+        this.itemAccess = paletteToBitsBlock(this.palettes());
+    }
+    fun stat(){
+        hist = new Hist({});
+        foreach(bp : this.blueprints.getValues()){
+            hist = hist.add(bp.stat());
+        }
+        return hist;
+    }
+    fun getSlotforBit(p, palette){
+        return this.itemAccess.get(palette).find(p);
+    }
+    fun place(p, withinReach){
+        foreach(pos : this.blueprints.getKeys()){
+            if (((p.getX() - pos.get(0))^2+ (p.getY()- pos.get(1))^2+ (p.getZ()- pos.get(2))^2)^0.5 < withinReach){
+                this.blueprints.get(pos).placeBlock(p, pos.get(0),pos.get(1), pos.get(2));
+            }
+        }
+    }
+    fun palettes(){
+        hist = new Hist({});
+        foreach(bp : this.blueprints.getValues()){
+            hist.addAll(bp.palette);
+        }
+        return hist.mapv.getKeys();
+    }
+    fun placeByMaterials(p, withinReach){
+        foreach(palettes : this.palettes()){
+            slot = this.getSlotforBit(p, palettes);
+            if(palettes.get("Name") == 'minecraft:air'){
+                continue;
+            }
+            if(swapToSlot(slot)){
+                sleep(100);
+                foreach(pos : this.blueprints.getKeys()){
+                    if (((p.getX() - pos.get(0))^2+ (p.getY()- pos.get(1))^2+ (p.getZ()- pos.get(2))^2)^0.5 < withinReach){
+                        this.blueprints.get(pos).placeMaterial(p,palettes, pos.get(0),pos.get(1), pos.get(2));
+                    }
+                }
+            } else {
+                p.message(palettes.get("Name") + palettes.get("Properties"));
+                if(p.getGamemode() == 'creative' && palettes.get("Properties") == null){
+                    p.say('/give @p bitsandchisels:bit_item'+ "{'bit':{'Name':'"+palettes.get("Name")+"'"+"}}"+' 16384');
+                }
+                sleep(10);
+            }
+        }
+    }
+}
+bp = new BlueprintCollection('mumei', 'b', [0,130,0]);
+fun showStat(stat){
+    foreach(value : stat.getKeys()){
+        player.message(value + ': '+ stat.get(value));
+    }
+}
+//showStat(bp.stat());
+bt = new BitsBlockAccess(new Pos(-67,98,-50));
+bp.placeByMaterials(player, 8);
+
