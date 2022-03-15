@@ -58,11 +58,28 @@ class BitsBlock{
         foreach(slots : p.getAllSlotsFor(BitsBlock.stack)){
             i = p.getItemForSlot(slots);
             n = i.getNbt().get('bit');
-            if(n.get('Name') == this.name && this.prop == n.get('prop')){
+
+
+            if(n.get('Name') == this.name && this.compare(this.prop , n.get('Properties'))){
                 return slots;
+            }
+            else if (n.get('Name') == this.name){
+                p.message(n.get('Properties'));
+                p.message(this.prop);
             }
         }
         return null;
+    }
+    fun compare(propA, propB){
+        if (propA == null && propB == null){
+            return true;
+        }
+        foreach(keys : propA.getKeys()){
+            if (propA.get(keys) != propB.get(keys)){
+                return false;
+            }
+        }
+        return true;
     }
 }
 fun prepareBits(palette){
@@ -352,7 +369,7 @@ class BlueprintCollection{
                 }
             } else {
                 p.message(palettes.get("Name") + palettes.get("Properties"));
-                if(p.getGamemode() == 'creative' && palettes.get("Properties") == null){
+                if(p.getGamemode() == 'survival' && palettes.get("Properties") == null){
                     p.say('/give @p bitsandchisels:bit_item'+ "{'bit':{'Name':'"+palettes.get("Name")+"'"+"}}"+' 16384');
                 }
                 sleep(10);
@@ -360,13 +377,13 @@ class BlueprintCollection{
         }
     }
 }
-bp = new BlueprintCollection('mumei', 'b', [0,130,0]);
+bp = new BlueprintCollection('mumei', 'b', [-83,139,416]);
 fun showStat(stat){
     foreach(value : stat.getKeys()){
         player.message(value + ': '+ stat.get(value));
     }
 }
 //showStat(bp.stat());
-bt = new BitsBlockAccess(new Pos(-67,98,-50));
+//bt = new BitsBlockAccess(new Pos(-67,98,-50));
 bp.placeByMaterials(player, 8);
 
